@@ -1,0 +1,58 @@
+﻿@page "/sentiment-gauge"
+@using ViewModels
+@using AppSettings
+@inject IJSRuntime JSRuntime
+@inject HttpClient Http
+
+<div class="gauge-container">
+    <div id="@GAUGE_ID" class="gauge"></div>
+    <div class="form-group">
+        <label for="sentimentTextArea">Tell us how you feel</label>
+        <textarea class="form-control" id="sentimentTextArea" rows="3" oninput="@UpdateScore"></textarea>
+    </div>
+</div>
+
+@functions {
+    const float DEFAULT_SCORE = 50.0f;
+    const string GAUGE_ID= "sentimentGauge";
+
+    bool _gaugeIsInitialized = false;
+
+    protected async void UpdateScore(UIChangeEventArgs evt)
+    {
+        var message = (string)evt.Value;
+        var score = await GetPredictionScore(message);
+        await JSRuntime.InvokeAsync<bool>("JsFunctions.updateGauge", score);
+    }
+
+    private async Task<float> GetPredictionScore(string message)
+    {
+        var url = ConnectionSettings.WebApiBaseUrl;
+        var score = DEFAULT_SCORE;
+
+        try
+        {
+            var response = await Http.PostJsonAsync<SentimentResponse>(url, new SentimentRequest
+            {
+                Message = message
+            });
+
+            score =  response.Result.Score;
+        }
+        catch(Exception ex)
+        {
+            Console.WriteLine(ex.Message);
+        }
+
+        return score;
+    }
+
+    protected override async Task OnAfterRenderAsync()
+    {
+        if (!_gaugeIsInitialized)
+        {
+            await JSRuntime.InvokeAsync<bool>("JsFunctions.initializeGauge", GAUGE_ID, DEFAULT_SCORE);
+            _gaugeIsInitialized = true;
+        }
+    }
+}
